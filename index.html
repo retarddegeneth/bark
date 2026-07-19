@@ -470,10 +470,20 @@
 <section>
     <div class="section-inner">
         <div class="section-title"><span>//</span> live chart</div>
-        <div class="chart-frame">
-            <span class="icon">📈</span>
-            <p>DexScreener embed — paste Pair Address for Robinhood Chain to render</p>
-            <a id="openChart" href="javascript:void(0);">open dexscreener</a>
+        <div style="border:1px solid #1a1a1a;background:#010101;">
+            <iframe src="https://dexscreener.com/embed?chain=robinhood&pairAddress=0x375bf87d780563d34d2252bc1f106e7da52d1ba3&theme=dark" style="width:100%;height:420px;border:0;" allow="clipboard-write"></iframe>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="section-inner">
+        <div class="section-title"><span>//</span> market pulse</div>
+        <div class="stats" id="marketStats">
+            <div class="stat-card"><div class="label">price</div><div class="value" id="msPrice">—</div></div>
+            <div class="stat-card"><div class="label">24h change</div><div class="value" id="msChange">—</div></div>
+            <div class="stat-card"><div class="label">24h volume</div><div class="value" id="msVolume">—</div></div>
+            <div class="stat-card"><div class="label">fdv</div><div class="value" id="msFdv">—</div></div>
         </div>
     </div>
 </section>
@@ -490,9 +500,9 @@
     const CONTRACT = "0x375bf87d780563d34d2252bc1f106e7da52d1ba3";
     const ROUTER = "app.uniswap.org";
     const CHAIN = "robinhood";
-    const UNISWAP_URL = "https://" + ROUTER + "/swap?outputCurrency=" + CONTRACT;
+    const UNISWAP_URL = "https://app.uniswap.org/swap?outputCurrency=" + CONTRACT;
     const DEX_URL = "https://dexscreener.com/" + CHAIN + "/" + CONTRACT;
-    const X_URL = "https://x.com/barkbarkbankr";
+    const MARKET_API = "https://api.dexscreener.com/latest/dex/pairs/robinhood/" + CONTRACT;
 
     function setCA() {
         const el = document.getElementById("caText");
@@ -506,17 +516,40 @@
         });
     }
 
+    async function loadMarket() {
+        try {
+            const res = await fetch(MARKET_API);
+            const data = await res.json();
+            const p = data.pairs?.[0];
+            if (!p) return;
+            const fmt = (v) => {
+                if (v == null || isNaN(v)) return '—';
+                if (v >= 1e9) return ('$' + (v/1e9).toFixed(2) + 'B');
+                if (v >= 1e6) return ('$' + (v/1e6).toFixed(2) + 'M');
+                if (v >= 1) return ('$' + v.toFixed(4));
+                return ('$' + v.toFixed(8));
+            };
+            const change = p.priceChange?.h24;
+            const chEl = document.getElementById("msChange");
+            if (chEl) {
+                const sign = change >= 0 ? '+' : '';
+                chEl.textContent = sign + (change ?? 0).toFixed(2) + '%';
+                chEl.style.color = change >= 0 ? 'var(--primary)' : 'var(--danger)';
+            }
+            document.getElementById("msPrice").textContent = fmt(p.priceUsd);
+            document.getElementById("msVolume").textContent = fmt(p.volume?.h24);
+            document.getElementById("msFdv").textContent = fmt(p.fdv);
+        } catch (e) {
+            console.error('market data failed', e);
+        }
+    }
+
     document.getElementById("copyBtn").addEventListener("click", copyCA);
-    document.getElementById("copyCaBtn").addEventListener("click", () => {
-        copyCA();
-    });
+    document.getElementById("copyCaBtn").addEventListener("click", copyCA);
     document.getElementById("buyBtn").addEventListener("click", () => {
         window.open(UNISWAP_URL, "_blank");
     });
     document.getElementById("chartBtn").addEventListener("click", () => {
-        window.open(DEX_URL, "_blank");
-    });
-    document.getElementById("openChart").addEventListener("click", () => {
         window.open(DEX_URL, "_blank");
     });
     document.getElementById("bankrLaunchBtn").addEventListener("click", () => {
@@ -524,6 +557,7 @@
     });
 
     setCA();
+    loadMarket();
 </script>
 
 </body>
