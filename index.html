@@ -321,6 +321,7 @@
     <div class="nav-links">
         <a href="#manifesto">manifesto</a>
         <a href="#tokenomics">tokenomics</a>
+        <a href="#buy">buy</a>
         <a href="https://x.com/barkbarkbankr" target="_blank" rel="noopener">x</a>
     </div>
 </nav>
@@ -346,7 +347,9 @@
                 hunting. sniffing. whining. winning.
             </p>
             <div class="hero-actions">
+                <a class="btn" id="copyCaBtn" href="javascript:void(0);">copy contract</a>
                 <a class="btn ghost" href="https://x.com/barkbarkbankr" target="_blank" rel="noopener">follow @barkbarkbankr</a>
+                <a class="btn" id="buyBtn" href="javascript:void(0);">buy $BARK</a>
             </div>
         </div>
     </div>
@@ -444,6 +447,22 @@
 <section>
     <div class="section-inner">
         <div class="section-title"><span>//</span> contract</div>
+        <div class="terminal">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                <span class="label">🔐 ca</span>
+                <code class="ca mono" id="caText">YOUR_CONTRACT_ADDRESS_HERE</code>
+            </div>
+            <div class="actions">
+                <button class="btn" id="copyBtn" style="padding:10px 14px;font-size:12px;">📋 copy</button>
+                <a class="btn ghost" id="chartBtn" href="javascript:void(0);" style="padding:10px 14px;font-size:12px;">📈 chart</a>
+            </div>
+        </div>
+        <div style="margin-top:12px;border:1px solid #1a1a1a;padding:12px 16px;background:#030303;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+            <div style="font-weight:800;color:var(--primary);letter-spacing:.18em;text-transform:uppercase;font-size:12px;">launched on bankr / $BNKR</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <a class="btn" id="bankrLaunchBtn" href="javascript:void(0);" style="padding:10px 14px;font-size:12px;">view bankr launch</a>
+            </div>
+        </div>
         <div class="disclaimer" style="margin-top:14px;">not financial advice. this is not a coin. it's a bark.</div>
     </div>
 </section>
@@ -509,9 +528,23 @@
 
 <script>
     const CONTRACT = "0x375bf87d780563d34d2252bc1f106e7da52d1ba3";
+    const ROUTER = "app.uniswap.org";
     const CHAIN = "robinhood";
+    const UNISWAP_URL = "https://app.uniswap.org/swap?outputCurrency=" + CONTRACT;
     const DEX_URL = "https://dexscreener.com/" + CHAIN + "/" + CONTRACT;
     const MARKET_API = "https://api.dexscreener.com/latest/dex/pairs/robinhood/" + CONTRACT;
+
+    function setCA() {
+        const el = document.getElementById("caText");
+        if (el) el.textContent = CONTRACT;
+    }
+
+    function copyCA() {
+        navigator.clipboard.writeText(CONTRACT).then(() => {
+            const b = document.getElementById("copyBtn");
+            if (b) { const t = b.textContent; b.textContent = "copied ✅"; setTimeout(() => b.textContent = t, 1000); }
+        });
+    }
 
     async function loadMarket() {
         try {
@@ -541,6 +574,19 @@
         }
     }
 
+    document.getElementById("copyBtn").addEventListener("click", copyCA);
+    document.getElementById("copyCaBtn").addEventListener("click", copyCA);
+    document.getElementById("buyBtn").addEventListener("click", () => {
+        window.open(UNISWAP_URL, "_blank");
+    });
+    document.getElementById("chartBtn").addEventListener("click", () => {
+        window.open(DEX_URL, "_blank");
+    });
+    document.getElementById("bankrLaunchBtn").addEventListener("click", () => {
+        window.open("https://bankr.bot/launches/" + CONTRACT, "_blank");
+    });
+
+    setCA();
     loadMarket();
 </script>
 
@@ -597,6 +643,11 @@ function drawBarkBase(topText, bottomText, glitch) {
         ctx.fillText(bottomText.toUpperCase(), W/2, H-170);
         ctx.shadowBlur = 0;
     }
+    // CA terminal
+    ctx.fillStyle = "rgba(204,255,0,.08)";
+    ctx.fillRect(60, H-240, W-120, 56);
+    ctx.font = "24px monospace"; ctx.textAlign = "left"; ctx.fillStyle = "#888";
+    ctx.fillText("CA: 0x375bf87d780563d34d2252bc1f106e7da52d1ba3", 90, H-198);
     if (glitch) noise(80);
 }
 
