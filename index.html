@@ -312,7 +312,104 @@
         footer .brand { color: var(--primary); font-weight: 900; letter-spacing: 0.18em; text-transform: uppercase; }
         footer p { color: var(--dim); font-size: 12px; max-width: 720px; }
         .disclaimer { font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.15em; margin-top: 14px; }
-    </style>
+    .scanner-block {{
+  background: #0a0a0a;
+  border: 1px solid #1a1a1a;
+  border-radius: 6px;
+  padding: 16px;
+  margin-top: 16px;
+  font-family: 'Courier New', Courier, monospace;
+}}
+.scanner-controls {{
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}}
+#scanInput {{
+  flex: 1;
+  background: #0a0a0a;
+  border: 1px solid #1a1a1a;
+  color: #00ff88;
+  padding: 10px 12px;
+  border-radius: 4px;
+  font-family: inherit;
+  outline: none;
+  font-size: 13px;
+}}
+#scanInput::placeholder {{ color: rgba(0, 255, 136, 0.35); }}
+#scanBtn, #scanAllBtn {{
+  background: #00ff88;
+  color: #0a0a0a;
+  border: none;
+  padding: 10px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 12px;
+}}
+#scanAllBtn {{
+  background: #0a0a0a;
+  color: #00ff88;
+  border: 1px solid #1a1a1a;
+}}
+#scanBtn:disabled, #scanAllBtn:disabled {{
+  opacity: 0.6;
+  cursor: not-allowed;
+}}
+.scan-log {{
+  background: #0a0a0a;
+  border: 1px solid #1a1a1a;
+  border-radius: 4px;
+  padding: 12px;
+  min-height: 80px;
+  max-height: 420px;
+  overflow-y: auto;
+  color: #9a9a9a;
+  font-size: 12px;
+  line-height: 1.6;
+}}
+.scan-log-empty {{ color: #555; }}
+.scan-log-entry {{ margin: 4px 0; }}
+.scan-log-time {{ color: #555; margin-right: 6px; }}
+.log-success {{ color: #00ff88; }}
+.log-warning {{ color: #f5a623; }}
+.log-danger {{ color: #ff2a2a; }}
+.log-muted {{ color: #9a9a9a; }}
+.log-symbol {{ color: #00ff88; font-weight: 700; }}
+.scan-result-block {{
+  background: #0a0a0a;
+  border: 1px solid #1a1a1a;
+  border-radius: 6px;
+  padding: 14px;
+  margin-top: 12px;
+}}
+.scan-header {{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-weight: 900;
+  color: #00ff88;
+}}
+.scan-sub {{ color: #9a9a9a; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; }}
+.verdict-safe {{ color: #00ff88; font-weight: 900; }}
+.verdict-avoid {{ color: #ff2a2a; font-weight: 900; }}
+.verdict-hold {{ color: #f5a623; font-weight: 900; }}
+.stock-flag {{ color: #ff2a2a; font-weight: 800; }}
+.scan-grid {{
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 10px 0;
+}}
+.scan-grid div {{ background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 4px; padding: 10px 12px; }}
+.bar-track {{ background: #1a1a1a; height: 6px; border-radius: 3px; margin-top: 8px; overflow: hidden; }}
+.bar-fill {{ height: 100%; border-radius: 3px; }}
+}}
+
+</style>
 </head>
 <body>
 
@@ -388,6 +485,23 @@
             </div>
         </div>
     </div>
+      <section id="scanner">
+        <div class="container">
+          <div class="section-header">
+            <span class="section-label">// token scanner</span>
+            <h2 class="section-title">bankr ai scan</h2>
+            <p class="section-desc">paste a token address or symbol. this tool fetches live dex data and scores scam risk, pump potential, and stock-likeness.</p>
+          </div>
+          <div class="scanner-block">
+            <div class="scanner-controls">
+              <input id="scanInput" type="text" placeholder="token address or symbol on bankr" autocomplete="off" />
+              <button id="scanBtn">scan</button>
+              <button id="scanAllBtn">scan all bankr</button>
+            </div>
+            <div id="scanLog" class="scan-log scan-log-empty">awaiting scan...</div>
+          </div>
+        </div>
+      </section>
 </section>
 
 <section>
@@ -588,6 +702,227 @@
 
     setCA();
     loadMarket();
+    <script>
+    (function(){{
+      var INPUT = document.getElementById("scanInput");
+      var LOG = document.getElementById("scanLog");
+      var SCAN_BTN = document.getElementById("scanBtn");
+      var SCAN_ALL_BTN = document.getElementById("scanAllBtn");
+
+      function time(){{
+        var d = new Date();
+        return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0') + ':' + d.getSeconds().toString().padStart(2,'0');
+      }}
+
+      function log(msg, cls){{
+        var el = document.createElement('div');
+        el.className = 'scan-log-entry ' + (cls || '');
+        el.innerHTML = '<span class="scan-log-time">[' + time() + ']</span>' + msg;
+        LOG.appendChild(el);
+        LOG.scrollTop = LOG.scrollHeight;
+      }}
+
+      async function fetchJSON(url){{
+        var r = await fetch(url);
+        if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+        return r.json();
+      }}
+
+      function isAddress(v){{
+        return /^0x[a-fA-F0-9]{{40}}$/.test(v);
+      }}
+
+      function fmtUSD(n){{
+        if (n == null) return '-';
+        if (n < 1000) return '$' + n.toFixed(4);
+        if (n < 1000000) return '$' + (n/1000).toFixed(2) + 'k';
+        return '$' + (n/1000000).toFixed(2) + 'm';
+      }}
+
+      function fmtPct(n){{
+        if (n == null) return '-';
+        return (n > 0 ? '+' : '') + n.toFixed(2) + '%';
+      }}
+
+      function fmtNum(n){{
+        if (n == null) return '-';
+        if (n < 1000) return n.toFixed(2);
+        if (n < 1000000) return (n/1000).toFixed(2) + 'k';
+        return (n/1000000).toFixed(2) + 'm';
+      }}
+
+      function pcColor(n){{
+        if (n == null) return '#9a9a9a';
+        if (n > 40) return '#00ff88';
+        if (n > -20) return '#f5a623';
+        return '#ff2a2a';
+      }}
+
+      function renderBar(pct, color){{
+        pct = Math.max(0, Math.min(100, pct));
+        return '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%; background:' + color + ';"></div></div>';
+      }}
+
+      function analyzePair(pair){{
+        var scam = 0;
+        var pump = 0;
+        var safety = 50;
+        var reasons = [];
+        var liq = pair.liquidity && pair.liquidity.usd ? pair.liquidity.usd : 0;
+        var vol = pair.volume && pair.volume.h24 ? pair.volume.h24 : 0;
+        var mc = pair.marketCap || pair.fdv || 0;
+        var h1c = pair.priceChange && pair.priceChange.h1 != null ? pair.priceChange.h1 : null;
+        var h24c = pair.priceChange && pair.priceChange.h24 != null ? pair.priceChange.h24 : null;
+        var txs = pair.txns || {{}};
+        var h1b = (txs.h1 && txs.h1.buys) || 0;
+        var h1s = (txs.h1 && txs.h1.sells) || 0;
+        var h24b = (txs.h24 && txs.h24.buys) || 0;
+        var h24s = (txs.h24 && txs.h24.sells) || 0;
+
+        if (liq < 10000) {{ scam += 30; reasons.push('low liquidity'); }}
+        else if (liq < 50000) {{ scam += 12; }}
+
+        if (vol < 500) {{ scam += 20; reasons.push('micro volume'); }}
+        else if (vol < 1000) {{ scam += 8; }}
+
+        var buySellRatio = h24b / (h24s + h1);
+        if (buySellRatio > 10 || buySellRatio < 0.1) {{ scam += 15; reasons.push('unbalanced txns'); }}
+
+        if (h24c != null) {{
+          if (h24c > 200) {{ pump += 25; reasons.push('explosive 24h movement'); }}
+          else if (h24c > 50) {{ pump += 15; }}
+          else if (h24c < -60) {{ pump -= 15; }}
+        }}
+
+        if (mc > 1000000 && mc < 50000000) pump += 12;
+        if (liq > 100000 && vol > 10000 && h24c != null && h24c > 0 && h24c < 100) pump += 15;
+
+        safety = Math.max(0, Math.min(100, 70 - scam + pump * 0.3));
+
+        return {{ scam: scam, pump: pump, safety: safety, reasons: reasons, liq: liq, vol: vol, mc: mc, h24c: h24c }};
+      }}
+
+      function isStockPair(pair){{
+        var base = (pair.baseToken && pair.baseToken.symbol) ? pair.baseToken.symbol.toLowerCase() : '';
+        var name = (pair.baseToken && pair.baseToken.name) ? pair.baseToken.name.toLowerCase() : '';
+        var quote = (pair.quoteToken && pair.quoteToken.symbol) ? pair.quoteToken.symbol.toLowerCase() : '';
+        var keywords = ["spy","nvda","tsla","msft","spcx","aapl","meta","qqq","amzn","googl","nflx","baba","uber","shop","coin","hood","robinhood","stock","stonk","s&p","dow","nasdaq","gold","oil","silver","btc","eth","weth"];
+        var text = base + ' ' + name + ' ' + quote;
+        for (var i = 0; i < keywords.length; i++) {{
+          if (text.indexOf(keywords[i]) !== -1) return true;
+        }}
+        return false;
+      }}
+
+      function renderScan(pair, analysis){{
+        var sym = pair.baseToken ? pair.baseToken.symbol : '?';
+        var name = pair.baseToken ? pair.baseToken.name : sym;
+        var chain = pair.chainId || '-';
+        var price = pair.priceUsd || pair.priceNative || null;
+        var priceStr = price ? '$' + parseFloat(price).toFixed(8) : '-';
+        var h24c = analysis.h24c;
+        var pcColorVal = pcColor(h24c);
+        var verdict = 'HOLD';
+        var verdictCls = 'verdict-hold';
+        if (analysis.scam < 20 && analysis.pump > 40) {{ verdict = 'BUY'; verdictCls = 'verdict-safe'; }}
+        else if (analysis.scam > 50 || analysis.safety < 35) {{ verdict = 'AVOID'; verdictCls = 'verdict-avoid'; }}
+
+        var stockFlag = isStockPair(pair) ? '<span class="stock-flag">STOCK LINKED</span>' : '';
+
+        var html = '<div class="scan-result-block">';
+        html += '<div class="scan-header">' + name + ' (' + sym + ') <span style="color:#9a9a9a;font-weight:400;">' + chain + '</span> ' + stockFlag + '</div>';
+        html += '<div class="scan-grid">';
+        html += '<div><div class="scan-sub">price</div><div style="font-weight:900;">' + priceStr + '</div></div>';
+        html += '<div><div class="scan-sub">24h change</div><div style="font-weight:900;color:' + pcColorVal + ';">' + fmtPct(h24c) + '</div></div>';
+        html += '<div><div class="scan-sub">liquidity</div><div style="font-weight:900;">' + fmtUSD(analysis.liq) + '</div></div>';
+        html += '</div>';
+        html += '<div class="scan-grid">';
+        html += '<div><div class="scan-sub">scam risk</div><div style="font-weight:900;">' + analysis.scam + '/100</div>' + renderBar(analysis.scam, '#ff2a2a') + '</div>';
+        html += '<div><div class="scan-sub">pump chance</div><div style="font-weight:900;">' + analysis.pump + '/100</div>' + renderBar(analysis.pump, '#f5a623') + '</div>';
+        html += '<div><div class="scan-sub">safety</div><div style="font-weight:900;">' + analysis.safety.toFixed(0) + '/100</div>' + renderBar(analysis.safety, '#00ff88') + '</div>';
+        html += '</div>';
+        html += '<div style="margin-top:10px;text-transform:uppercase;letter-spacing:0.1em;" class="' + verdictCls + '">verdict: ' + verdict + '</div>';
+        if (analysis.reasons.length) {{
+          html += '<div style="margin-top:8px;color:#9a9a9a;font-size:11px;">why: ' + analysis.reasons.join(', ') + '</div>';
+        }}
+        html += '<div style="margin-top:8px;"><a href=\"https://dexscreener.com\" target=\"_blank\">open dexscreener</a></div>';
+        html += '</div>';
+        LOG.insertAdjacentHTML('afterend', html);
+      }}
+
+      async function scanAddress(address){{
+        log('-> scan address: ' + address, 'log-symbol');
+        try {{
+          var data = await fetchJSON('https://api.dexscreener.com/latest/dex/tokens/' + encodeURIComponent(address));
+          var pairs = data.pairs || [];
+          if (!pairs.length) {{ log('  x no pairs found', 'log-danger'); return; }}
+          log('  found ' + pairs.length + ' pairs, using top result', 'log-muted');
+          var analysis = analyzePair(pairs[0]);
+          renderScan(pairs[0], analysis);
+        }} catch(e) {{ log('fetch error: ' + e.message, 'log-danger'); }}
+      }}
+
+      async function searchTokens(query){{
+        var data = await fetchJSON('https://api.dexscreener.com/latest/dex/search?q=' + encodeURIComponent(query));
+        return data.pairs || [];
+      }}
+
+      async function scanAll(){{
+        SCAN_ALL_BTN.disabled = true;
+        LOG.innerHTML = '';
+        log('--- scan all bankr tokens ---', 'log-symbol');
+        var tokens = [
+          {{symbol:"BNKR",name:"BankrCoin",chain:"base",address:"0x22aF33FE49fD1Fa80c7149773dDe5890D3c76F3b"}},
+          {{symbol:"BNKR",name:"Bankr",chain:"robinhood",address:"0x178E54df3D091EE4D0B2eF9e3692b76526"}},
+          {{symbol:"BARK",name:"Bark",chain:"robinhood",address:"0x375bf87d780563d34d2252bc1f106e7da52d1ba3"}},
+          {{symbol:"BANKROLL",name:"BANKROLL",chain:"robinhood",address:"0x1c5BE03b4475FBdD678AA2c19904A03C957CB244"}},
+          {{symbol:"BNKRSTR",name:"Bankr Strategy",chain:"robinhood",address:"0x073994bD1e0dF07e5B15167916FcC4C859a70BA3"}},
+          {{symbol:"VBNK",name:"VBNK",chain:"robinhood",address:"0x6C5d359DC9853a5d5b20D4e78368f1fCa01B9Ba3"}},
+          {{symbol:"BNKRHOOD",name:"BNKRHOOD",chain:"robinhood",address:"0x1F281c6656594081FDFe80c5A47BdD33b884DBA3"}},
+          {{symbol:"BNKRW",name:"BNKRW",chain:"base",address:"0xf48bC234855aB08ab2EC0cfaaEb2A80D065a3b07"}},
+          {{symbol:"BANKR",name:"BANKR",chain:"solana",address:"4BmaxxckzuAnFZANYP8uZ4MQUBLoKBHxbx1xbZSDbank"}}
+        ];
+        for (var i = 0; i < tokens.length; i++) {{
+          var tok = tokens[i];
+          log('-> [' + (i+1) + '/' + tokens.length + '] ' + tok.name + ' (' + tok.symbol + ') [' + tok.chain + ']', 'log-symbol');
+          try {{
+            var data = await fetchJSON('https://api.dexscreener.com/latest/dex/tokens/' + encodeURIComponent(tok.address));
+            var pairs = data.pairs || [];
+            if (!pairs.length) {{ log('  x no pairs', 'log-danger'); continue; }}
+            var top = pairs[0];
+            var analysis = analyzePair(top);
+            if (analysis.safety > 55 && analysis.pump > 30) {{
+              log('  likely safe + pump possible: ' + top.priceUsd, 'log-success');
+            }} else {{
+              log('  caution: scam ' + analysis.scam + '%, pump ' + analysis.pump + '%', 'log-warning');
+            }}
+            renderScan(top, analysis);
+          }} catch(e) {{ log('  fetch error: ' + e.message, 'log-danger'); }}
+        }}
+        log('--- scan complete ---', 'log-muted');
+        SCAN_ALL_BTN.disabled = false;
+      }}
+
+      SCAN_BTN.addEventListener("click", async function(){{
+        var val = INPUT.value.trim();
+        if (!val) {{ log("enter a token address or symbol.", "log-warning"); return; }}
+        if (isAddress(val)) {{ await scanAddress(val); }}
+        else {{
+          log("-> search for " + val, "log-symbol");
+          var pairs = await searchTokens(val);
+          if (!pairs.length) {{ log("  x no tokens found", "log-danger"); return; }}
+          log("  found " + pairs.length + " pairs, showing top result", "log-muted");
+          var analysis = analyzePair(pairs[0]);
+          renderScan(pairs[0], analysis);
+        }}
+      }});
+
+      SCAN_ALL_BTN.addEventListener("click", function(){{ scanAll(); }});
+
+      INPUT.addEventListener("keydown", function(e){{ if (e.key === "Enter") SCAN_BTN.click(); }});
+    }})();
+    </script>
+
 </script>
 
 <script>
