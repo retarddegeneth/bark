@@ -312,7 +312,103 @@
         footer .brand { color: var(--primary); font-weight: 900; letter-spacing: 0.18em; text-transform: uppercase; }
         footer p { color: var(--dim); font-size: 12px; max-width: 720px; }
         .disclaimer { font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.15em; margin-top: 14px; }
-    </style>
+    /* Scanner styles */
+.scanner-block {
+    background: #0a0a0a;
+    border: 1px solid #1a1a1a;
+    border-radius: 6px;
+    padding: 16px;
+    margin-top: 16px;
+    font-family: 'Courier New', Courier, monospace;
+}
+.scanner-controls {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+#scanInput {
+    flex: 1;
+    min-width: 220px;
+    background: #0d0d0d;
+    color: var(--primary);
+    border: 1px solid #1a1a1a;
+    border-radius: 4px;
+    padding: 10px 12px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 14px;
+    outline: none;
+}
+#scanInput:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(204, 255, 0, 0.15);
+}
+#scanBtn, #scanAllBtn {
+    background: transparent;
+    color: var(--primary);
+    border: 1px solid var(--primary);
+    border-radius: 4px;
+    padding: 10px 16px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 13px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    transition: all 0.15s ease;
+}
+#scanBtn:hover, #scanAllBtn:hover {
+    background: var(--primary);
+    color: #000;
+}
+.scan-log {
+    background: #0d0d0d;
+    border: 1px solid #1a1a1a;
+    border-radius: 4px;
+    padding: 12px;
+    min-height: 200px;
+    max-height: 600px;
+    overflow-y: auto;
+    font-size: 13px;
+    line-height: 1.5;
+}
+.scan-line {
+    padding: 4px 0;
+    border-bottom: 1px solid #111;
+    word-break: break-all;
+}
+.scan-line:last-child {
+    border-bottom: none;
+}
+.scan-result-block {
+    background: #0f0f0f;
+    border: 1px solid #1a1a1a;
+    border-radius: 4px;
+    padding: 12px;
+    margin-top: 8px;
+}
+.scan-header {
+    font-weight: 900;
+    font-size: 14px;
+    color: var(--primary);
+    margin-bottom: 8px;
+}
+.scan-sub {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+}
+.log-info { color: var(--primary); }
+.log-symbol { color: #CCFF00; font-weight: bold; }
+.log-success { color: #00ff88; }
+.log-warning { color: #f5a623; }
+.log-danger { color: #ff2a2a; }
+.log-muted { color: var(--muted); }
+.verdict-safe { color: #00ff88; font-weight: 900; }
+.verdict-warning { color: #f5a623; font-weight: 900; }
+.verdict-danger { color: #ff2a2a; font-weight: 900; }
+.stock-flag { color: #ff2a2a; font-weight: 800; }
+</style>
 </head>
 <body>
 
@@ -518,6 +614,21 @@
     </div>
 </section>
 
+<section id="scanner">
+    <div class="section-inner">
+        <div class="section-title"><span class="typed-cursor"></span>token scanner [live feed]</div>
+        <div class="scanner-block">
+            <div class="scanner-controls">
+                <input type="text" id="scanInput" placeholder="token address / symbol" autocomplete="off" />
+                <button id="scanBtn">scan</button>
+                <button id="scanAllBtn">scan all bankr tokens</button>
+            </div>
+            <div id="scanLog" class="scan-log"></div>
+        </div>
+        <p class="section-desc">scans dex pairs in realtime. risk score = scam likelihood. pump potential = growth chance. stock pair = token paired with a stock-like symbol. bundle check = possible coordinated buy pattern. data via dexscreener api.</p>
+    </div>
+</section>
+
 <footer>
     <div class="brand">🐕‍🦺 $BARK</div>
     <div>
@@ -691,5 +802,252 @@ document.getElementById("genDownload").addEventListener("click", () => {
 });
 })();
 
+
+<script>
+(function(){
+    var INPUT = document.getElementById("scanInput");
+    var LOG = document.getElementById("scanLog");
+    var SCAN_BTN = document.getElementById("scanBtn");
+    var SCAN_ALL_BTN = document.getElementById("scanAllBtn");
+    var DEX_SEARCH = "https://api.dexscreener.com/latest/dex/search?q=";
+    var DEX_TOKEN="https://api.dexscreener.com/latest/dex/tokens/";
+    var STOCK_KEYWORDS = ["spy","nvda","tsla","msft","spcx","aapl","meta","qqq","amzn","googl","nflx","baba","uber","shop","coin","hood","robinhood","stock"];
+    STOCK_KEYWORDS = STOCK_KEYWORDS.concat(["stonk","s&p","dow","nasdaq","gold","oil","silver","btc","eth","weth"]);
+
+    var KNOWN_BANKR_TOKENS=[
+        {symbol:"BNKR",name:"BankrCoin",chain:"base",address:"0x22aF33FE49fD1Fa80c7149773dDe5890D3c76F3b"},
+        {symbol:"BNKR",name:"Bankr",chain:"robinhood",address:"0x178E54df3D091EE4D0B2eF9e3692b76526"},
+        {symbol:"BARK",name:"Bark",chain:"robinhood",address:"0x375bf87d780563d34d2252bc1f106e7da52d1ba3"},
+        {symbol:"BANKROLL",name:"BANKROLL",chain:"robinhood",address:"0x1c5BE03b4475FBdD678AA2c19904A03C957CB244"},
+        {symbol:"BNKRSTR",name:"Bankr Strategy",chain:"robinhood",address:"0x073994bD1e0dF07e5B15167916FcC4C859a70BA3"},
+        {symbol:"VBNK",name:"vBNKR RWA",chain:"robinhood",address:"0x6C5d359DC9853a5d5b20D4e78368f1fCa01B9Ba3"},
+        {symbol:"BNKRHOOD",name:"Bankr Hood",chain:"robinhood",address:"0x1F281c6656594081FDFe80c5A47BdD33b884DBA3"},
+        {symbol:"BNKRW",name:"BankrWallet",chain:"base",address:"0xf48bC234855aB08ab2EC0cfaaEb2A80D065a3b07"},
+        {symbol:"BANKR",name:"Bankr on Sol",chain:"solana",address:"4BmaxxckzuAnFZANYP8uZ4MQUBLoKBHxbx1xbZSDbank"},
+        {symbol:"BRODIE",name:"Robinhood Dog",chain:"robinhood",address:"0x45F82AC5d507e988f7406935da8eEfe495a360e0"},
+        {symbol:"WALLET",name:"Robinhood Wallet",chain:"robinhood",address:"0x0339f5459FC690aC85F1782e15782A151b4A9E1b"},
+        {symbol:"RH67",name:"Robinhood Fastest Asset",chain:"robinhood",address:"0x3B9B713a3bBA6c3388371CFDB072CD70118Bb727"},
+        {symbol:"REAL",name:"REALSTONK",chain:"robinhood",address:"0x237c79C93c3EB8C61a2a2a7465a851B0381b8ba3"},
+        {symbol:"CLIPPY",name:"Clippy",chain:"robinhood",address:"0x0BAd4a9eE049d78DAA0dc6B1eb5df5e2Ac82E2cD"}
+    ];
+
+    function isAddress(str) { return /^0x[a-fA-F0-9]{40}$/.test(str.trim()); }
+
+    function log(text, cls) {
+        cls = cls || "log-info";
+        var el = document.createElement("div");
+        el.className = "scan-line " + cls;
+        el.innerHTML = text;
+        LOG.appendChild(el);
+        LOG.scrollTop = LOG.scrollHeight;
+    }
+
+    function barHTML(val, max, color) {
+        var pct = Math.round((val / max) * 100);
+        var bgCls = val > 60 ? "log-danger" : (val > 30 ? "log-warning" : "log-success");
+        var barColor = bgCls === 'log-danger' ? '#ff2a2a' : (bgCls === 'log-warning' ? '#f5a623' : '#00ff88');
+        return '<span class="' + bgCls + '">' + pct + '% <span style="display:inline-block;height:12px;width:' + Math.max(pct, 4) + 'px;background:' + color + ';border:1px solid ' + barColor + ';vertical-align:middle;margin-right:6px;"></span></span>';
+    }
+
+    async function fetchJSON(url) {
+        try {
+            var res = await fetch(url);
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            return await res.json();
+        } catch(e) { log("fetch error: " + e.message, "log-danger"); return null; }
+    }
+
+    async function fetchTokenData(address) {
+        var data = await fetchJSON(DEX_TOKEN + encodeURIComponent(address));
+        return data.pairs || [];
+    }
+
+    async function searchTokens(query) {
+        var data = await fetchJSON(DEX_SEARCH + encodeURIComponent(query));
+        return data.pairs || [];
+    }
+
+    function analyzePair(pair) {
+        var liq = pair.liquidity && pair.liquidity.usd ? pair.liquidity.usd : 0;
+        var fdv = pair.fdv || pair.marketCap || 0;
+        var vol = pair.volume && pair.volume.h24 ? pair.volume.h24 : 0;
+        var priceChange = pair.priceChange && pair.priceChange.h24 ? pair.priceChange.h24 : 0;
+        var txns = pair.txns && pair.txns.h24 ? pair.txns.h24 : {};
+        var buys = txns.buys || 0;
+        var sells = txns.sells || 0;
+        var totalTxns = buys + sells;
+        var quote = pair.quoteToken || {};
+
+        var scam = 0;
+        if (liq === 0) scam += 40;
+        else if (liq < 1000) scam += 35;
+        else if (liq < 5000) scam += 20;
+        else if (liq < 15000) scam += 10;
+
+        if (fdv > 0 && liq > 0) {
+            var ratio = fdv / liq;
+            if (ratio > 3000) scam += 30;
+            else if (ratio > 1500) scam += 20;
+            else if (ratio > 800) scam += 10;
+        }
+
+        if (priceChange > 500) scam += 25;
+        else if (priceChange > 200) scam += 15;
+        else if (priceChange < -80) scam += 15;
+
+        if (totalTxns > 0 && vol > 0) {
+            var avgVolPerTxn = vol / totalTxns;
+            if (avgVolPerTxn > 20000) scam += 20;
+            else if (avgVolPerTxn > 5000) scam += 10;
+        }
+
+        if (buys + sells > 0 && buys / (buys + sells) > 0.85 && priceChange > 150) scam += 15;
+
+        var h1buys = pair.txns && pair.txns.h1 ? pair.txns.h1.buys : 0;
+        var m5buys = pair.txns && pair.txns.m5 ? pair.txns.m5.buys : 0;
+        if (h1buys === 0 && m5buys === 0 && liq > 0 && totalTxns < 10) scam += 10;
+
+        var pump = 0;
+        if (fdv > 0 && fdv < 50000) pump += 35;
+        else if (fdv > 0 && fdv < 200000) pump += 25;
+        else if (fdv > 0 && fdv < 1000000) pump += 15;
+        else if (fdv > 0 && fdv < 5000000) pump += 5;
+
+        if (liq > 15000 && liq < 500000) pump += 20;
+
+        if (vol > 5000 && vol < liq * 10) pump += 20;
+
+        if (priceChange > 3 && priceChange < 60) pump += 15;
+        else if (priceChange > 1 && priceChange <= 3) pump += 8;
+
+        if (totalTxns > 15 && totalTxns < 500) pump += 10;
+
+        var stockPairs = [];
+        if (quote.symbol || quote.name) {
+            var sym = (quote.symbol || "").toLowerCase();
+            var nm = (quote.name || "").toLowerCase();
+            if (STOCK_KEYWORDS.some(function(k) { return sym.indexOf(k) > -1 || nm.indexOf(k) > -1; })) {
+                stockPairs.push(pair);
+            }
+        }
+
+        var bundlePossible = false;
+        var bundleNote = "insufficient tick data";
+        if (totalTxns > 0 && vol > 0) {
+            var avg = vol / totalTxns;
+            if (avg > 15000) { bundlePossible = true; bundleNote = "avg $" + avg.toFixed(0) + "/txn suggests coordinated buys"; }
+            else if (totalTxns < 5 && vol > 5000) { bundlePossible = true; bundleNote = "very low txn count (" + totalTxns + ") with $" + vol.toFixed(0) + " volume"; }
+        }
+
+        var hasBoost = pair.boosts && pair.boosts.length > 0;
+        return { scam: scam, pump: pump, stockPairs: stockPairs, bundle: { possible: bundlePossible, note: bundleNote }, hasBoost: hasBoost, pair: pair };
+    }
+
+    function renderScan(pair, analysis) {
+        var name = pair.baseToken && pair.baseToken.name ? pair.baseToken.name : "UNKNOWN";
+        var symbol = pair.baseToken && pair.baseToken.symbol ? pair.baseToken.symbol : "???";
+        var chain = pair.chainId || "unknown";
+        var price = pair.priceUsd || "—";
+        var liq = analysis.pair.liquidity && analysis.pair.liquidity.usd ? analysis.pair.liquidity.usd : 0;
+        var fdv = analysis.pair.fdv || analysis.pair.marketCap || 0;
+        var vol = analysis.pair.volume && analysis.pair.volume.h24 ? analysis.pair.volume.h24 : 0;
+        var pc = analysis.pair.priceChange && analysis.pair.priceChange.h24 ? analysis.pair.priceChange.h24 : 0;
+        var txns = analysis.pair.txns && analysis.pair.txns.h24 ? analysis.pair.txns.h24 : {};
+        var buys = txns.buys || 0;
+        var sells = txns.sells || 0;
+
+        function fmtMoney(v) {
+            if (v == null || isNaN(v)) return "—";
+            if (v >= 1e9) return "$" + (v/1e9).toFixed(2) + "B";
+            if (v >= 1e6) return "$" + (v/1e6).toFixed(2) + "M";
+            if (v >= 1e3) return "$" + (v/1e3).toFixed(2) + "K";
+            return "$" + v.toFixed(2);
+        }
+
+        function fmtPct(v) { return (v >= 0 ? "+" : "") + v.toFixed(2) + "%"; }
+
+        var verdict = "HOLD";
+        var verdictCls = "verdict-warning";
+        if (analysis.scam < 20 && analysis.pump > 40) { verdict = "BUY"; verdictCls = "verdict-safe"; }
+        else if (analysis.scam >= 50) { verdict = "DUMP"; verdictCls = "verdict-danger"; }
+        else if (analysis.scam >= 30) { verdict = "AVOID"; verdictCls = "verdict-danger"; }
+
+        var stockNote = "none detected";
+        if (analysis.stockPairs.length > 0) {
+            var sp = analysis.stockPairs[0];
+            stockNote = "paired with " + (sp.quoteToken && sp.quoteToken.symbol ? sp.quoteToken.symbol : "?") + " (" + (sp.quoteToken && sp.quoteToken.name ? sp.quoteToken.name : "stock") + ") -- stock-linked token";
+        }
+
+        var boostNote = analysis.hasBoost ? " [DEX BOOST ACTIVE -- paid marketing]" : "";
+
+        var html = '<div class="scan-result-block">';
+        html += '<div class="scan-header">' + name + " (" + symbol + ") <span class=\"log-muted\">" + chain + "</span></div>";
+        html += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;font-size:12px;">';
+        var priceStr = (price !== "—" ? "$" + parseFloat(price).toFixed(parseFloat(price) < 0.01 ? 8 : 4) : "—");
+        html += '<div><span class="scan-sub">price</span><br><span style="font-weight:900;">' + priceStr + "</span></div>";
+        var pcColor = (pc >= 0 ? "var(--primary)" : "var(--danger)");
+        html += '<div><span class="scan-sub">24h change</span><br><span style="font-weight:900;color:' + pcColor + '">' + fmtPct(pc) + "</span></div>";
+        html += '<div><span class="scan-sub">liquidity</span><br><span style="font-weight:900;">' + fmtMoney(liq) + "</span></div>";
+        html += '<div><span class="scan-sub">fdv / cap</span><br><span style="font-weight:900;">' + fmtMoney(fdv) + "</span></div>";
+        html += '<div><span class="scan-sub">24h volume</span><br><span style="font-weight:900;">' + fmtMoney(vol) + "</span></div>";
+        html += '<div><span class="scan-sub">buy/sell txns</span><br><span style="font-weight:900;">' + buys + " / " + sells + "</span></div>";
+        html += '</div>';
+        html += '<div style="margin-top:12px;border-top:1px solid #1a1a1a;padding-top:10px;font-size:12px;display:grid;grid-template-columns:repeat(2,1fr);gap:10px;">';
+        html += '<div><span class="scan-sub">risk score</span><br>' + barHTML(analysis.scam, 100, "#ff2a2a") + ' <span class="log-muted">' + (analysis.scam > 60 ? "HIGH" : analysis.scam > 30 ? "MEDIUM" : "LOW") + "</span></div>";
+        html += '<div><span class="scan-sub">pump potential</span><br>' + barHTML(analysis.pump, 100, "#CCFF00") + ' <span class="log-muted">' + (analysis.pump > 60 ? "HIGH" : analysis.pump > 30 ? "MEDIUM" : "LOW") + "</span></div>";
+        html += '</div>';
+        html += '<div style="margin-top:10px;font-size:12px;display:flex;gap:14px;flex-wrap:wrap;">';
+        var bundleCls = analysis.bundle.possible ? "log-warning" : "log-muted";
+        var bundleText = analysis.bundle.possible ? "⚠ " + analysis.bundle.note : "✓ no clear pattern";
+        html += '<div><span class="scan-sub">bundle check</span><br><span class="' + bundleCls + '">' + bundleText + "</span></div>";
+        var stockCls = analysis.stockPairs.length > 0 ? "stock-flag" : "log-muted";
+        html += '<div><span class="scan-sub">stock pair</span><br><span class="' + stockCls + '">' + stockNote + "</span></div>";
+        html += '<div><span class="scan-sub">verdict</span><br><span class="' + verdictCls + '">' + verdict + boostNote + "</span></div>";
+        html += '</div>';
+        html += '</div>';
+        log(html, "");
+    }
+
+    async function scanAddress(address) {
+        log("→ scanning " + address + "...", "log-symbol");
+        var pairs = await fetchTokenData(address);
+        if (!pairs.length) { log("  ✗ no dex data found for " + address, "log-danger"); return; }
+        var analysis = analyzePair(pairs[0]);
+        renderScan(pairs[0], analysis);
+    }
+
+    async function scanAll() {
+        log("▸ quick scan: all known bankr tokens", "log-symbol");
+        for (var i = 0; i < KNOWN_BANKR_TOKENS.length; i++) {
+            var tok = KNOWN_BANKR_TOKENS[i];
+            log("→ [" + (i+1) + "/" + KNOWN_BANKR_TOKENS.length + "] " + tok.name + " (" + tok.symbol + ") [" + tok.chain + "]", "log-symbol");
+            var pairs = await fetchTokenData(tok.address);
+            if (!pairs.length) { log("  ✗ no data", "log-muted"); continue; }
+            var analysis = analyzePair(pairs[0]);
+            renderScan(pairs[0], analysis);
+            await new Promise(function(r) { setTimeout(r, 300); });
+        }
+        log("▸ scan complete", "log-success");
+    }
+
+    SCAN_BTN.addEventListener("click", async function() {
+        var val = INPUT.value.trim();
+        if (!val) { log("enter a token address or symbol.", "log-warning"); return; }
+        if (isAddress(val)) { await scanAddress(val); }
+        else {
+            log("→ search for " + val, "log-symbol");
+            var pairs = await searchTokens(val);
+            if (!pairs.length) { log("  ✗ no tokens found", "log-danger"); return; }
+            log("  found " + pairs.length + " pairs, showing top result", "log-muted");
+            var analysis = analyzePair(pairs[0]);
+            renderScan(pairs[0], analysis);
+        }
+    });
+
+    SCAN_ALL_BTN.addEventListener("click", function() { scanAll(); });
+
+    INPUT.addEventListener("keydown", function(e) { if (e.key === "Enter") SCAN_BTN.click(); });
+})();
+</script>
 </body>
 </html>
